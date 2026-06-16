@@ -1,0 +1,41 @@
+# Docker Compose - runs PostgreSQL and the backend API
+# Frontend runs locally with `npm run dev` (see README)
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: oneai-db
+    environment:
+      POSTGRES_USER: oneai
+      POSTGRES_PASSWORD: oneai_password
+      POSTGRES_DB: oneai
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U oneai -d oneai"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: oneai-backend
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://oneai:oneai_password@db:5432/oneai
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      CORS_ORIGINS: http://localhost:3000
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+
+volumes:
+  postgres_data:
