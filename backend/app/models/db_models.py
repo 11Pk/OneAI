@@ -93,3 +93,107 @@ class JudgeResult(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     message: Mapped["Message"] = relationship(back_populates="judge_results")
+
+
+
+# The PostgreSQL Schema looks like the following:
+# -- Enable UUID generation (optional if app generates UUIDs)
+# CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+# -- =========================
+# -- USERS
+# -- =========================
+
+# CREATE TABLE users (
+#     id UUID PRIMARY KEY,
+#     email VARCHAR(255) UNIQUE NOT NULL,
+#     name VARCHAR(255) DEFAULT 'User',
+#     created_at TIMESTAMPTZ DEFAULT NOW()
+# );
+
+# -- =========================
+# -- CONVERSATIONS
+# -- =========================
+
+# CREATE TABLE conversations (
+#     id UUID PRIMARY KEY,
+#     user_id UUID NOT NULL,
+#     title VARCHAR(500) DEFAULT 'New Chat',
+#     created_at TIMESTAMPTZ DEFAULT NOW(),
+#     updated_at TIMESTAMPTZ DEFAULT NOW(),
+
+#     CONSTRAINT fk_conversation_user
+#         FOREIGN KEY (user_id)
+#         REFERENCES users(id)
+# );
+
+# -- =========================
+# -- MESSAGES
+# -- =========================
+
+# CREATE TABLE messages (
+#     id UUID PRIMARY KEY,
+#     conversation_id UUID NOT NULL,
+#     role VARCHAR(20) NOT NULL,
+#     content TEXT NOT NULL,
+#     compare_mode BOOLEAN DEFAULT FALSE,
+#     created_at TIMESTAMPTZ DEFAULT NOW(),
+
+#     CONSTRAINT fk_message_conversation
+#         FOREIGN KEY (conversation_id)
+#         REFERENCES conversations(id)
+# );
+
+# -- =========================
+# -- TASKS
+# -- =========================
+
+# CREATE TABLE tasks (
+#     id UUID PRIMARY KEY,
+#     message_id UUID NOT NULL,
+#     task_index INTEGER DEFAULT 0,
+#     original_prompt TEXT NOT NULL,
+#     enhanced_prompt TEXT,
+#     category VARCHAR(50) DEFAULT 'general',
+#     provider VARCHAR(50) NOT NULL,
+#     status VARCHAR(20) DEFAULT 'pending',
+#     created_at TIMESTAMPTZ DEFAULT NOW(),
+
+#     CONSTRAINT fk_task_message
+#         FOREIGN KEY (message_id)
+#         REFERENCES messages(id)
+# );
+
+# -- =========================
+# -- RESPONSES
+# -- =========================
+
+# CREATE TABLE responses (
+#     id UUID PRIMARY KEY,
+#     task_id UUID NOT NULL,
+#     provider VARCHAR(50) NOT NULL,
+#     model VARCHAR(100),
+#     content TEXT NOT NULL,
+#     created_at TIMESTAMPTZ DEFAULT NOW(),
+
+#     CONSTRAINT fk_response_task
+#         FOREIGN KEY (task_id)
+#         REFERENCES tasks(id)
+# );
+
+# -- =========================
+# -- JUDGE RESULTS
+# -- =========================
+
+# CREATE TABLE judge_results (
+#     id UUID PRIMARY KEY,
+#     message_id UUID NOT NULL,
+#     selected_provider VARCHAR(50) NOT NULL,
+#     selected_response TEXT NOT NULL,
+#     reasoning TEXT NOT NULL,
+#     created_at TIMESTAMPTZ DEFAULT NOW(),
+
+#     CONSTRAINT fk_judge_message
+#         FOREIGN KEY (message_id)
+#         REFERENCES messages(id)
+# );
