@@ -31,3 +31,6 @@ postgres_data/
 # Build
 dist/
 build/
+
+# Ignore all pickle model files
+*.pkl
