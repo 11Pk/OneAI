@@ -1,64 +1,514 @@
+
 """
 Planner Module
 --------------
-Decides whether a user prompt should be split into multiple subtasks.
-
-Uses an LLM with a simple prompt. Returns:
-- needs_decomposition: True/False
-- subtasks: list of task strings (empty if no decomposition)
+1. Uses the trained ML classifier to determine whether
+   the prompt requires decomposition.
+2. If decomposition is required, calls the LLM to generate
+   a DAG of subtasks.
+3. If decomposition is not required, returns a single-node DAG.
 """
 
+
 import json
+from pathlib import Path
+
+import joblib
+import numpy as np
+from sentence_transformers import SentenceTransformer
 
 from app.providers.factory import get_provider
 
 
-PLANNER_PROMPT = """You are a task planner. Analyze the user prompt and decide if it should be broken into separate subtasks.
+# ============================================================
+# PATHS
+# ============================================================
 
-Rules:
-- Simple questions or single requests: NO decomposition (one task)
-- Complex requests with multiple distinct parts: YES decomposition
-- Examples needing decomposition: "Write a blog post AND create a Python script for data analysis"
-- Examples NOT needing decomposition: "What is machine learning?", "Write a hello world in Python"
 
-Respond ONLY with valid JSON in this exact format:
-{{"needs_decomposition": true/false, "subtasks": ["task1", "task2"]}}
 
-If needs_decomposition is false, subtasks should contain only the original prompt as one item.
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
+MODEL_DIR = PROJECT_ROOT / "models" / "hybrid"
+
+TFIDF_PATH = MODEL_DIR / "tfidf_vectorizer.pkl"
+SVD_PATH = MODEL_DIR / "svd.pkl"
+CLASSIFIER_PATH = MODEL_DIR / "hybrid_logistic.pkl"
+
+
+# ============================================================
+# LOAD ML MODELS
+# ============================================================
+
+print("Loading planner ML models...")
+
+tfidf_vectorizer = joblib.load(TFIDF_PATH)
+
+svd = joblib.load(SVD_PATH)
+
+classifier = joblib.load(CLASSIFIER_PATH)
+
+
+# Sentence Transformer
+embedding_model = SentenceTransformer(
+    "sentence-transformers/all-MiniLM-L6-v2"
+)
+
+print("Planner ML models loaded successfully.")
+
+
+# ============================================================
+# LLM DAG PROMPT
+# ============================================================
+
+DAG_PROMPT = """
+You are an intelligent task planner.
+
+The user's prompt has already been classified by an ML
+classifier as requiring decomposition.
+
+Your task is to break the user's request into a Directed
+Acyclic Graph (DAG) of meaningful subtasks.
+
+IMPORTANT RULES:
+
+1. Create only the necessary subtasks.
+2. Each node should represent one concrete operation.
+3. Identify dependencies between tasks.
+4. A task can depend on zero or more previous tasks.
+5. Tasks with no dependency can execute independently.
+6. If two tasks can be executed in parallel, do not make one
+   unnecessarily depend on the other.
+7. Do not create unnecessary intermediate tasks.
+8. The graph MUST be acyclic.
+9. The final task should produce the final requested result
+   whenever appropriate.
+10. Return ONLY valid JSON.
+11. Do not include markdown.
+12. Do not include explanations outside the JSON.
+
+Return exactly this format:
+
+{
+    "nodes": [
+        {
+            "id": "task_1",
+            "task": "Description of the task",
+            "depends_on": []
+        },
+        {
+            "id": "task_2",
+            "task": "Description of the task",
+            "depends_on": ["task_1"]
+        }
+    ]
+}
+
+Example:
+
+User prompt:
+"Research the best laptops under 80000, compare their
+specifications and recommend the best one for programming."
+
+Output:
+
+{
+    "nodes": [
+        {
+            "id": "task_1",
+            "task": "Research laptops under 80000 suitable for programming",
+            "depends_on": []
+        },
+        {
+            "id": "task_2",
+            "task": "Collect and compare specifications of the shortlisted laptops",
+            "depends_on": ["task_1"]
+        },
+        {
+            "id": "task_3",
+            "task": "Check current prices of the shortlisted laptops",
+            "depends_on": ["task_1"]
+        },
+        {
+            "id": "task_4",
+            "task": "Recommend the best laptop based on specifications and price",
+            "depends_on": ["task_2", "task_3"]
+        }
+    ]
+}
 
 User prompt:
 {prompt}
 """
 
 
-async def plan(prompt: str) -> tuple[bool, list[str]]:
-    """
-    Analyze prompt and return (needs_decomposition, list_of_subtasks).
+# ============================================================
+# ML CLASSIFICATION
+# ============================================================
 
-    Uses OpenRouter as the planner LLM (could use any provider).
-    Falls back to single-task mode if LLM fails.
+def classify_decomposition(prompt: str) -> bool:
     """
-    provider = get_provider("openrouter")
-    full_prompt = PLANNER_PROMPT.format(prompt=prompt)
+    Predict whether the prompt requires decomposition.
+
+    Returns:
+        True  -> decomposition required
+        False -> no decomposition required
+
+    Feature pipeline:
+
+        Prompt
+          |
+          +--> TF-IDF --> SVD ----+
+          |                       |
+          +--> Sentence Embedding-+
+                                  |
+                                  v
+                            Hybrid Features
+                                  |
+                                  v
+                         Logistic Regression
+    """
+
+    # --------------------------------------------------------
+    # 1. TF-IDF
+    # --------------------------------------------------------
+
+    tfidf_features = tfidf_vectorizer.transform(
+        [prompt]
+    )
+
+    # --------------------------------------------------------
+    # 2. Truncated SVD
+    # --------------------------------------------------------
+
+    tfidf_svd_features = svd.transform(
+        tfidf_features
+    )
+
+    # --------------------------------------------------------
+    # 3. Sentence Embedding
+    # --------------------------------------------------------
+
+    embedding_features = embedding_model.encode(
+        [prompt],
+        normalize_embeddings=True
+    )
+
+    # --------------------------------------------------------
+    # 4. Combine
+    # --------------------------------------------------------
+
+    hybrid_features = np.hstack(
+        [
+            tfidf_svd_features,
+            embedding_features
+        ]
+    )
+
+    # --------------------------------------------------------
+    # 5. ML Prediction
+    # --------------------------------------------------------
+
+    prediction = classifier.predict(
+        hybrid_features
+    )[0]
+
+    return bool(prediction)
+
+
+# ============================================================
+# DAG VALIDATION
+# ============================================================
+
+def validate_dag(nodes: list[dict]) -> bool:
+    """
+    Validate the DAG returned by the LLM.
+
+    Checks:
+
+    - nodes exist
+    - every node has an ID
+    - every node has a task
+    - dependency IDs exist
+    - no self dependency
+    - graph contains no cycle
+    """
+
+    if not nodes:
+        return False
+
+    # --------------------------------------------------------
+    # Collect node IDs
+    # --------------------------------------------------------
+
+    node_ids = set()
+
+    for node in nodes:
+
+        node_id = node.get("id")
+
+        task = node.get("task")
+
+        if not node_id or not task:
+            return False
+
+        if node_id in node_ids:
+            return False
+
+        node_ids.add(node_id)
+
+    # --------------------------------------------------------
+    # Validate dependencies
+    # --------------------------------------------------------
+
+    graph = {}
+
+    for node in nodes:
+
+        node_id = node["id"]
+
+        dependencies = node.get(
+            "depends_on",
+            []
+        )
+
+        if not isinstance(dependencies, list):
+            return False
+
+        graph[node_id] = dependencies
+
+        for dependency in dependencies:
+
+            # Dependency must exist
+            if dependency not in node_ids:
+                return False
+
+            # No self dependency
+            if dependency == node_id:
+                return False
+
+    # --------------------------------------------------------
+    # Cycle Detection
+    # --------------------------------------------------------
+
+    visited = set()
+    recursion_stack = set()
+
+    def has_cycle(node_id):
+
+        if node_id in recursion_stack:
+            return True
+
+        if node_id in visited:
+            return False
+
+        visited.add(node_id)
+        recursion_stack.add(node_id)
+
+        for dependency in graph[node_id]:
+
+            if has_cycle(dependency):
+                return True
+
+        recursion_stack.remove(node_id)
+
+        return False
+
+    for node_id in node_ids:
+
+        if has_cycle(node_id):
+            return False
+
+    return True
+
+
+# ============================================================
+# EXTRACT JSON
+# ============================================================
+
+def extract_json(raw_response: str) -> dict:
+    """
+    Extract JSON from an LLM response.
+
+    Handles both:
+
+    {
+        "nodes": [...]
+    }
+
+    and markdown code blocks.
+    """
+
+    text = raw_response.strip()
+
+    # --------------------------------------------------------
+    # Remove markdown code block
+    # --------------------------------------------------------
+
+    if "```" in text:
+
+        parts = text.split("```")
+
+        if len(parts) >= 2:
+
+            text = parts[1].strip()
+
+            # Remove "json" language identifier
+            if text.lower().startswith("json"):
+
+                text = text[4:].strip()
+
+    # --------------------------------------------------------
+    # Parse JSON
+    # --------------------------------------------------------
+
+    return json.loads(text)
+
+
+# ============================================================
+# MAIN PLANNER
+# ============================================================
+
+async def plan(prompt: str) -> dict:
+    
+
+    # ========================================================
+    # STEP 1
+    # ML CLASSIFICATION
+    # ========================================================
+
+    needs_decomposition = classify_decomposition(
+        prompt
+    )
+
+    print(
+        f"[Planner ML] "
+        f"needs_decomposition={needs_decomposition}"
+    )
+
+
+    # ========================================================
+    # STEP 2
+    # NO DECOMPOSITION
+    # ========================================================
+
+    if not needs_decomposition:
+
+        print(
+            "[Planner] No decomposition required."
+        )
+
+        return {
+            "needs_decomposition": False,
+
+            "nodes": [
+                {
+                    "id": "task_1",
+                    "task": prompt,
+                    "depends_on": []
+                }
+            ]
+        }
+
+
+    # ========================================================
+    # STEP 3
+    # DECOMPOSITION REQUIRED
+    # ========================================================
+
+    print(
+        "[Planner] Decomposition required. "
+        "Calling LLM..."
+    )
+
+    provider = get_provider(
+        "openrouter"
+    )
+
+    full_prompt = DAG_PROMPT.format(
+        prompt=prompt
+    )
+
 
     try:
-        raw = await provider.generate(full_prompt)
-        # Extract JSON from response (handle markdown code blocks)
-        text = raw.strip()
-        if "```" in text:
-            text = text.split("```")[1]
-            if text.startswith("json"):
-                text = text[4:]
-        data = json.loads(text.strip())
 
-        needs_decomposition = bool(data.get("needs_decomposition", False))
-        subtasks = data.get("subtasks", [prompt])
+        # ----------------------------------------------------
+        # Call LLM
+        # ----------------------------------------------------
 
-        if not subtasks:
-            subtasks = [prompt]
+        raw_response = await provider.generate(
+            full_prompt
+        )
 
-        return needs_decomposition, subtasks
+        print(
+            "[Planner] LLM response received."
+        )
 
-    except (json.JSONDecodeError, KeyError, IndexError):
-        # If parsing fails, treat as single task
-        return False, [prompt]
+
+        # ----------------------------------------------------
+        # Extract JSON
+        # ----------------------------------------------------
+
+        data = extract_json(
+            raw_response
+        )
+
+
+        # ----------------------------------------------------
+        # Extract nodes
+        # ----------------------------------------------------
+
+        nodes = data.get(
+            "nodes",
+            []
+        )
+
+
+        # ----------------------------------------------------
+        # Validate DAG
+        # ----------------------------------------------------
+
+        if not validate_dag(nodes):
+
+            raise ValueError(
+                "LLM returned an invalid DAG."
+            )
+
+
+        print(
+            f"[Planner] Valid DAG generated "
+            f"with {len(nodes)} nodes."
+        )
+
+
+        return {
+            "needs_decomposition": True,
+            "nodes": nodes
+        }
+
+
+    except Exception as e:
+
+        print(
+            f"[Planner ERROR] {e}"
+        )
+
+
+        # ====================================================
+        # FALLBACK
+        # ====================================================
+
+        print(
+            "[Planner] Falling back to single task."
+        )
+
+        return {
+            "needs_decomposition": False,
+
+            "nodes": [
+                {
+                    "id": "task_1",
+                    "task": prompt,
+                    "depends_on": []
+                }
+            ]
+        }
