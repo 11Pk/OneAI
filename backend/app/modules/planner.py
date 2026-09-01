@@ -59,7 +59,6 @@ print("Planner ML models loaded successfully.")
 # ============================================================
 # LLM DAG PROMPT
 # ============================================================
-
 DAG_PROMPT = """
 You are an intelligent task planner.
 
@@ -68,6 +67,23 @@ classifier as requiring decomposition.
 
 Your task is to break the user's request into a Directed
 Acyclic Graph (DAG) of meaningful subtasks.
+
+For every subtask, you must also identify the expected
+OUTPUT TYPE of that subtask.
+
+The allowed output types are EXACTLY:
+
+* "text"   : the task produces textual output
+* "image"  : the task produces an image
+* "video"  : the task produces a video
+
+IMPORTANT:
+
+* "output_type" refers to what the task PRODUCES, not what it consumes.
+* For example, analyzing an uploaded image and explaining it produces TEXT, so output_type should be "text".
+* Creating an image from a textual description produces IMAGE.
+* Creating a video from a prompt produces VIDEO.
+* Never use any output type other than "text", "image", or "video".
 
 IMPORTANT RULES:
 
@@ -82,28 +98,33 @@ IMPORTANT RULES:
 8. The graph MUST be acyclic.
 9. The final task should produce the final requested result
    whenever appropriate.
-10. Return ONLY valid JSON.
-11. Do not include markdown.
-12. Do not include explanations outside the JSON.
+10. Every node MUST contain an "output_type" field.
+11. "output_type" MUST be exactly one of:
+    "text", "image", "video".
+12. Return ONLY valid JSON.
+13. Do not include markdown.
+14. Do not include explanations outside the JSON.
 
 Return exactly this format:
 
 {
-    "nodes": [
-        {
-            "id": "task_1",
-            "task": "Description of the task",
-            "depends_on": []
-        },
-        {
-            "id": "task_2",
-            "task": "Description of the task",
-            "depends_on": ["task_1"]
-        }
-    ]
+"nodes": [
+{
+"id": "task_1",
+"task": "Description of the task",
+"output_type": "text",
+"depends_on": []
+},
+{
+"id": "task_2",
+"task": "Description of the task",
+"output_type": "image",
+"depends_on": ["task_1"]
+}
+]
 }
 
-Example:
+Example 1:
 
 User prompt:
 "Research the best laptops under 80000, compare their
@@ -112,28 +133,106 @@ specifications and recommend the best one for programming."
 Output:
 
 {
-    "nodes": [
-        {
-            "id": "task_1",
-            "task": "Research laptops under 80000 suitable for programming",
-            "depends_on": []
-        },
-        {
-            "id": "task_2",
-            "task": "Collect and compare specifications of the shortlisted laptops",
-            "depends_on": ["task_1"]
-        },
-        {
-            "id": "task_3",
-            "task": "Check current prices of the shortlisted laptops",
-            "depends_on": ["task_1"]
-        },
-        {
-            "id": "task_4",
-            "task": "Recommend the best laptop based on specifications and price",
-            "depends_on": ["task_2", "task_3"]
-        }
-    ]
+"nodes": [
+{
+"id": "task_1",
+"task": "Research laptops under 80000 suitable for programming",
+"output_type": "text",
+"depends_on": []
+},
+{
+"id": "task_2",
+"task": "Collect and compare specifications of the shortlisted laptops",
+"output_type": "text",
+"depends_on": ["task_1"]
+},
+{
+"id": "task_3",
+"task": "Check current prices of the shortlisted laptops",
+"output_type": "text",
+"depends_on": ["task_1"]
+},
+{
+"id": "task_4",
+"task": "Recommend the best laptop based on specifications and price",
+"output_type": "text",
+"depends_on": ["task_2", "task_3"]
+}
+]
+}
+
+Example 2:
+
+User prompt:
+"Research the history of the Eiffel Tower and create an
+illustrated video explaining its history."
+
+Output:
+
+{
+"nodes": [
+{
+"id": "task_1",
+"task": "Research the history and important events related to the Eiffel Tower",
+"output_type": "text",
+"depends_on": []
+},
+{
+"id": "task_2",
+"task": "Create suitable illustrations based on the researched history",
+"output_type": "image",
+"depends_on": ["task_1"]
+},
+{
+"id": "task_3",
+"task": "Create an explanatory video using the researched information and illustrations",
+"output_type": "video",
+"depends_on": ["task_1", "task_2"]
+}
+]
+}
+
+Example 3:
+
+User prompt:
+"Analyze this image and explain what is happening in it."
+
+Output:
+
+{
+"nodes": [
+{
+"id": "task_1",
+"task": "Analyze the uploaded image and explain what is happening in it",
+"output_type": "text",
+"depends_on": []
+}
+]
+}
+
+Example 4:
+
+User prompt:
+"Generate an image of a futuristic city and then create
+a video showing the city from different angles."
+
+Output:
+
+{
+"nodes": [
+{
+"id": "task_1",
+"task": "Generate an image of a futuristic city",
+"output_type": "image",
+"depends_on": []
+},
+{
+"id": "task_2",
+"task": "Create a video showing the futuristic city from different angles using the generated image",
+"output_type": "video",
+"depends_on": ["task_1"]
+}
+]
 }
 
 User prompt:
