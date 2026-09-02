@@ -1,8 +1,3 @@
-"""
-Base class for all AI providers.
-Every provider must implement the generate() method.
-"""
-
 from abc import ABC, abstractmethod
 
 
@@ -12,9 +7,16 @@ class BaseProvider(ABC):
     name: str = "base"
 
     @abstractmethod
-    async def generate(self, prompt: str) -> str:
+    async def generate(
+        self,
+        prompt: str,
+        model: str | None = None
+    ) -> str:
         """
         Send a prompt to the AI model and return the text response.
-        Must be implemented by each provider subclass.
+
+        model:
+            Specific model ID selected by OneAI classifier.
+            If None, provider uses its configured default model.
         """
         pass
