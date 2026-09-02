@@ -1,174 +1,106 @@
-# """
-# Task Classifier Module
-# ----------------------
-# Categorizes each task into one of: coding, research, writing, analysis, general.
+import json
+from pathlib import Path
 
-# Uses an LLM with a simple classification prompt.
-# """
+import faiss
+import numpy as np
+from sentence_transformers import SentenceTransformer
 
-# import json
+# --------------------------------------------------
+# Paths
+# --------------------------------------------------
 
-# from app.providers.factory import get_provider
+BASE_DIR = Path(__file__).resolve().parents[3]
 
-# # Valid categories the router understands
-# CATEGORIES = ["coding", "research", "writing", "analysis", "general"]
+REGISTRY_PATH = BASE_DIR / "models" / "model_registery.json"
+INDEX_PATH = BASE_DIR / "models" / "model_description.faiss"
+IDS_PATH = BASE_DIR / "models" / "model_ids.json"
 
-# CLASSIFIER_PROMPT = """Classify the following task into exactly ONE category.
+# Load metadata
+with open(REGISTRY_PATH, "r", encoding="utf-8") as f:
+    registry = json.load(f)
+models = registry["models"]
 
-# Categories:
-# - coding: programming, debugging, code review, algorithms, software development
-# - research: finding information, facts, explanations, learning topics
-# - writing: essays, emails, creative writing, content creation
-# - analysis: data analysis, comparisons, evaluations, reasoning
-# - general: anything that doesn't fit above
+with open(IDS_PATH, "r", encoding="utf-8") as f:
+    vector_to_model_id = json.load(f)
 
-# Respond ONLY with valid JSON:
-# {{"category": "coding"}}
+index = faiss.read_index(str(INDEX_PATH))
+embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 
-# Task:
-# {task}
-# """
+MIN_SIMILARITY_THRESHOLD = 0.20
 
 
-# async def classify(task: str) -> str:
-#     """
-#     Return the category string for a task.
-#     Defaults to 'general' if classification fails.
-#     """
-#     provider = get_provider("openrouter")
-#     full_prompt = CLASSIFIER_PROMPT.format(task=task)
+def get_allowed_models(output_type):
+    return [
+        m for m in models 
+        if output_type in m.get("output_modalities", [])
+    ]
 
-#     try:
-#         raw = await provider.generate(full_prompt)
-#         text = raw.strip()
-#         if "```" in text:
-#             text = text.split("```")[1]
-#             if text.startswith("json"):
-#                 text = text[4:]
-#         data = json.loads(text.strip())
-#         category = data.get("category", "general").lower()
 
-#         if category not in CATEGORIES:
-#             return "general"
-#         return category
+def get_top_models(subtask, output_type="text", k=3):
+    allowed_models = get_allowed_models(output_type)
+    if not allowed_models:
+        return []
 
-#     except (json.JSONDecodeError, KeyError):
-#         return "general"
+    allowed_ids = {m["id"] for m in allowed_models}
 
+    # Format query directly as an action target
+    formatted_query = f"Model good for: {subtask}"
 
+    query_embedding = embedding_model.encode(
+        [formatted_query],
+        normalize_embeddings=True
+    )
+    query_embedding = np.asarray(query_embedding, dtype="float32")
+    faiss.normalize_L2(query_embedding)
 
+    # Search top 25 vectors to cover multi-vector hits
+    search_k = min(index.ntotal, 25)
+    scores, indices = index.search(query_embedding, search_k)
 
+    # Max-pooling: collect highest similarity per model
+    best_model_scores = {}
 
+    for score, index_pos in zip(scores[0], indices[0]):
+        if index_pos < 0:
+            continue
 
+        model_id = vector_to_model_id[index_pos]
 
+        if model_id not in allowed_ids:
+            continue
 
+        similarity = float(score)
 
+        # Store max similarity for this model
+        if model_id not in best_model_scores or similarity > best_model_scores[model_id]:
+            best_model_scores[model_id] = similarity
 
+    # Sort models by highest score
+    sorted_models = sorted(
+        best_model_scores.items(), 
+        key=lambda item: item[1], 
+        reverse=True
+    )[:k]
 
+    results = []
+    for model_id, score in sorted_models:
+        results.append({
+            "model_id": model_id,
+            "similarity_score": score,
+            "match_percentage": f"{round(score * 100, 2)}%"
+        })
+    if not results or results[0]["similarity_score"] < MIN_SIMILARITY_THRESHOLD:
+      return [{
+        "model_id": "gemini-flash",
+        "similarity_score": 0.0,
+        "match_percentage": "Fallback (Low Confidence)"
+    }]
 
+    return results
 
 
-#using ML To classify
+if __name__ == "__main__":
+    subtask = "Please proofread this short email, fix any grammar or spelling mistakes, and rewrite it to sound slightly more polite and professional."
 
-"""
-Classifies each task into one of:
-coding, research, writing, analysis, general
-
-ML approach:
-TF-IDF + Logistic Regression
-"""
-
-import pandas as pd
-
-from sklearn.model_selection import train_test_split
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, classification_report
-
-
-# Valid categories understood by OneAI
-CATEGORIES = [
-    "coding",
-    "research",
-    "writing",
-    "analysis",
-    "general"
-]
-
-# 1. Load Dataset
-
-
-df = pd.read_csv("data/classifier_dataset.csv")
-
-X = df["text"]
-y = df["category"]
-
-
-# 2. Split Dataset
-
-#80 percent of the data is used for training
-#each tiem the data is split into the same sets
-#equal proportions of eachc y category is there
-X_train, X_test, y_train, y_test = train_test_split(
-    X,
-    y,
-    test_size=0.2,
-    random_state=42,
-    stratify=y
-)
-
-
-# 3. Convert Text → TF-IDF Vectors
-#removes the english stop words and maximum one-two word combinations are considered for the vectorization
-vectorizer = TfidfVectorizer(
-    lowercase=True,
-    stop_words="english",
-    ngram_range=(1, 2)
-)
-
-X_train_tfidf = vectorizer.fit_transform(X_train)
-X_test_tfidf = vectorizer.transform(X_test)
-
-
-
-# 4. Train ML Classifier
-
-
-model = LogisticRegression(
-    max_iter=1000
-)
-
-model.fit(X_train_tfidf, y_train)
-
-
-# 5. Evaluate Model
-
-
-predictions = model.predict(X_test_tfidf)
-
-accuracy = accuracy_score(y_test, predictions)
-
-print("OneAI TF-IDF Classifier")
-
-
-print(f"Accuracy: {accuracy:.4f}")
-
-print("\nClassification Report:")
-print(classification_report(y_test, predictions))
-
-
-# 6. OneAI Classifier Function
-
-async def classify(task: str) -> str:
-
-    # Convert the new task into the SAME TF-IDF space
-    task_vector = vectorizer.transform([task])
-
-    # Predict category
-    category = model.predict(task_vector)[0]
-
-    # Safety check
-    if category not in CATEGORIES:
-        return "general"
-
-    return category
+    result = get_top_models(subtask, output_type="text", k=3)
+    print(json.dumps(result, indent=4))

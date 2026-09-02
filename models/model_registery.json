@@ -1,0 +1,233 @@
+{
+    "models": [
+        {
+            "id": "gpt-oss-120b",
+            "provider": "groq",
+            "api_model": "openai/gpt-oss-120b",
+            "input_modalities": ["text"],
+            "output_modalities": ["text"],
+            "description": "Large reasoning model designed for complex multi-step programming, advanced algorithmic proofs, and deep software architectural analysis.",
+            "capabilities": [
+                "programming",
+                "software engineering",
+                "C++",
+                "Python",
+                "Java",
+                "JavaScript",
+                "debugging",
+                "algorithm design",
+                "data structures",
+                "dynamic programming",
+                "competitive programming",
+                "complex reasoning"
+            ],
+            "strengths": [
+                "complex algorithm design",
+                "debugging multi-file applications",
+                "dynamic programming problems",
+                "mathematical proofs"
+            ],
+            "good_for": [
+                "debug C++ dynamic programming solution",
+                "analyze time and space complexity",
+                "design efficient algorithms",
+                "solve competitive programming problems",
+                "review complex C++ or Python code",
+                "solve multi-step mathematical problems"
+            ]
+        },
+        {
+            "id": "qwen-coder-32b",
+            "provider": "openrouter",
+            "api_model": "qwen/qwen-2.5-coder-32b-instruct:free",
+            "input_modalities": ["text"],
+            "output_modalities": ["text"],
+            "description": "State-of-the-art code generation specialist model optimized for software engineering, syntax completion, refactoring, and SQL database queries.",
+            "capabilities": [
+                "code generation",
+                "debugging",
+                "code completion",
+                "refactoring",
+                "C++",
+                "Python",
+                "JavaScript",
+                "TypeScript",
+                "SQL",
+                "HTML CSS",
+                "API development"
+            ],
+            "strengths": [
+                "writing clean code",
+                "debugging syntax errors",
+                "writing SQL queries",
+                "building full-stack web features"
+            ],
+            "good_for": [
+                "write C++ code",
+                "write Python scripts",
+                "debug code errors",
+                "refactor codebase",
+                "generate SQL queries",
+                "build REST API endpoints",
+                "complete missing code functions"
+            ]
+        },
+        {
+            "id": "llama-3.3-70b",
+            "provider": "groq",
+            "api_model": "llama-3.3-70b-versatile",
+            "input_modalities": ["text"],
+            "output_modalities": ["text"],
+            "description": "High-speed versatile large language model optimized for deep text analysis, creative writing, complex reasoning, and technical documentation.",
+            "capabilities": [
+                "text generation",
+                "deep reasoning",
+                "technical writing",
+                "code explanation",
+                "summarization",
+                "analysis"
+            ],
+            "strengths": [
+                "long text generation",
+                "structured JSON output",
+                "fast response time",
+                "technical domain knowledge"
+            ],
+            "good_for": [
+                "write technical documentation",
+                "explain complex concepts",
+                "generate structured JSON data",
+                "draft essays and reports",
+                "summarize long technical articles"
+            ]
+        },
+        {
+            "id": "deepseek-r1-distill",
+            "provider": "groq",
+            "api_model": "deepseek-r1-distill-llama-70b",
+            "input_modalities": ["text"],
+            "output_modalities": ["text"],
+            "description": "Specialized reasoning model fine-tuned for chain-of-thought problem solving, logic puzzles, calculus, and algorithm analysis.",
+            "capabilities": [
+                "chain of thought reasoning",
+                "mathematics",
+                "logic puzzles",
+                "algorithm complexity",
+                "formal logic"
+            ],
+            "strengths": [
+                "step-by-step mathematical proofs",
+                "finding subtle logical bugs",
+                "calculus and linear algebra"
+            ],
+            "good_for": [
+                "prove mathematical theorem",
+                "step-by-step logical reasoning",
+                "analyze Big-O time complexity",
+                "solve calculus and probability problems"
+            ]
+        },
+        {
+            "id": "gpt-oss-20b",
+            "provider": "groq",
+            "api_model": "openai/gpt-oss-20b",
+            "input_modalities": ["text"],
+            "output_modalities": ["text"],
+            "description": "Lightweight reasoning language model built for ultra-fast response times, simple code debugging, and quick technical Q&A.",
+            "capabilities": [
+                "fast programming",
+                "debugging",
+                "basic reasoning",
+                "quick Q&A"
+            ],
+            "strengths": [
+                "ultra-low latency",
+                "quick answers",
+                "basic coding checks"
+            ],
+            "good_for": [
+                "answer quick coding questions",
+                "debug short Python script",
+                "check syntax errors",
+                "explain code snippet briefly"
+            ]
+        },
+        {
+            "id": "gemini-flash",
+            "provider": "google",
+            "api_model": "gemini-flash",
+            "input_modalities": ["text", "image", "video"],
+            "output_modalities": ["text"],
+            "description": "Multimodal AI model capable of analyzing images, processing videos, reading long PDF documents, and answering questions visually.",
+            "capabilities": [
+                "image understanding",
+                "video analysis",
+                "document OCR",
+                "multimodal reasoning",
+                "long context processing"
+            ],
+            "strengths": [
+                "analyzing images and diagrams",
+                "extracting text from video",
+                "reading PDF files"
+            ],
+            "good_for": [
+                "analyze an image",
+                "describe video contents",
+                "read text from document image",
+                "answer questions about diagram or chart",
+                "summarize PDF file"
+            ]
+        },
+        {
+            "id": "flux-schnell",
+            "provider": "openrouter",
+            "api_model": "black-forest-labs/flux-1-schnell:free",
+            "input_modalities": ["text"],
+            "output_modalities": ["image"],
+            "description": "High-speed text-to-image generative model capable of rendering detailed visual artwork, photorealistic scenes, logos, and UI designs.",
+            "capabilities": [
+                "image generation",
+                "text to image",
+                "artistic rendering",
+                "visual asset generation"
+            ],
+            "strengths": [
+                "fast image generation",
+                "photorealistic details",
+                "artistic styles"
+            ],
+            "good_for": [
+                "generate an image",
+                "create visual illustration",
+                "draw picture of prompt",
+                "design logo or graphic asset"
+            ]
+        },
+        {
+            "id": "lfm-2.5-2.6b",
+            "provider": "openrouter",
+            "api_model": "liquid/lfm-2.5-2.6b-instruct:free",
+            "input_modalities": ["text"],
+            "output_modalities": ["text"],
+            "description": "Ultra-lightweight fast text processing model for summarization, grammar correction, translation, and text transformation.",
+            "capabilities": [
+                "summarization",
+                "text rewriting",
+                "grammar correction",
+                "translation"
+            ],
+            "strengths": [
+                "minimal latency",
+                "short text rewrites",
+                "lightweight processing"
+            ],
+            "good_for": [
+                "summarize text",
+                "rewrite paragraph",
+                "fix grammar and spelling",
+                "translate text to another language"
+            ]
+        }
+    ]
+}
