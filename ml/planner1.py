@@ -702,6 +702,47 @@ joblib.dump(
 print("Embedding XGBoost model saved.")
 
 # ============================================================
+# MODEL 8
+# TF-IDF + SVD + SENTENCE EMBEDDINGS + XGBOOST
+# ============================================================
+
+print("\n\nTraining Hybrid + XGBoost...")
+
+hybrid_xgb_classifier = XGBClassifier(
+    n_estimators=300,
+    max_depth=5,
+    learning_rate=0.05,
+    subsample=0.8,
+    colsample_bytree=0.8,
+    objective="binary:logistic",
+    eval_metric="logloss",
+    random_state=42,
+    n_jobs=-1
+)
+
+hybrid_xgb_classifier.fit(
+    X_train_hybrid,
+    y_train
+)
+
+hybrid_xgb_results = evaluate_model(
+    "TF-IDF + SVD + Embeddings + XGBoost",
+    hybrid_xgb_classifier,
+    X_test_hybrid,
+    y_test
+)
+
+joblib.dump(
+    hybrid_xgb_classifier,
+    os.path.join(
+        HYBRID_DIR,
+        "hybrid_xgboost.pkl"
+    )
+)
+
+print("Hybrid XGBoost model saved.")
+
+# ============================================================
 # FINAL COMPARISON
 # ============================================================
 
